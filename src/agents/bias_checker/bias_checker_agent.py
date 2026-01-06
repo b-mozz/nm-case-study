@@ -267,6 +267,31 @@ class BiasChecker:
         group_metrics = metric_frame.by_group.to_dict()
         #then, we list only the sensitive features
         groups = list(metric_frame.by_group.index)
+
+        # Fix after initial test run: diabetic_data had groups with very few samples (e.g., "Unknown/Invalid" gender)
+        # These tiny groups cause spurious violations (e.g., 100% difference with 0% prediction rate)
+        # Solution: Filter out groups with sample size below minimum threshold
+        MIN_GROUP_SIZE = 30  # Statistical minimum for reliable metrics (similar to Central Limit Theorem)
+        small_groups = []
+        for group in groups:
+            group_size = int(group_metrics["count"][group])
+            if group_size < MIN_GROUP_SIZE:
+                small_groups.append((group, group_size))
+
+        if small_groups:
+            import warnings
+            warnings.warn(
+                f"Excluding {len(small_groups)} group(s) from '{attr_name}' analysis due to small sample size (< {MIN_GROUP_SIZE}): "
+                f"{[(g, n) for g, n in small_groups]}. "
+                f"Metrics on tiny groups are unreliable and create false violations.",
+                UserWarning
+            )
+            # Filter out small groups
+            groups = [g for g in groups if int(group_metrics["count"][g]) >= MIN_GROUP_SIZE]
+
+        if len(groups) < 2:
+            # Not enough groups to compare - skip this attribute
+            return {}, []  # Return empty metrics and no violations
         
         # Format group metrics nicely
         # before: {"accuracy": {"male": 0.8, "female": 0.9}, "count": ...}

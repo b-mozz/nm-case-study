@@ -104,6 +104,9 @@ class DataQualityValidationAgent:
             "min_rows": 10,                    # Minimum rows required
             "max_examples": 20,                # Maximum examples to show in reports
             "anomaly_contamination": 0.1,      # Expected proportion of outliers (10%)
+            # Fix after initial test run: diabetic_data used '?' for missing values (UCI ML Repository standard)
+            # 192,849 missing values went undetected without this (weight column was 96.8% missing!)
+            "missing_indicators": ['?', '', ' ', 'NA', 'N/A', 'null', 'NULL', 'None'],  # Values treated as missing
         }
 
         # I passed config as a parameter
@@ -758,15 +761,25 @@ def validate_dataset(data: pd.DataFrame, config: Optional[Dict] = None) -> Valid
 
 def validate_file(filepath: str, config: Optional[Dict] = None) -> ValidationReport:
     """Convenience function to validate a CSV/Excel file."""
+
+    # Fix after initial test run: diabetic_data had '?' as missing indicator (UCI ML Repository standard)
+    # Without na_values, 192,849 missing values (51.5% of total) went undetected
+    # Get missing indicators from config or use defaults
+    agent = DataQualityValidationAgent(config=config)
+    missing_indicators = agent.config.get("missing_indicators", ['?', '', ' ', 'NA', 'N/A', 'null', 'NULL'])
+
     if filepath.endswith('.csv'):
-        df = pd.read_csv(filepath)
+        # Read CSV with custom missing value indicators
+        df = pd.read_csv(filepath, na_values=missing_indicators, keep_default_na=True)
     elif filepath.endswith(('.xlsx', '.xls')):
-        df = pd.read_excel(filepath)
+        # Excel files also need na_values parameter
+        df = pd.read_excel(filepath, na_values=missing_indicators, keep_default_na=True)
     elif filepath.endswith('.parquet'):
+        # Parquet doesn't support na_values, but stores nulls properly
         df = pd.read_parquet(filepath)
     else:
         raise ValueError(f"Unsupported file type: {filepath}")
-    
+
     return validate_dataset(df, config)
 
 
