@@ -9,6 +9,13 @@ from typing import Optional
 from datetime import datetime
 from pathlib import Path
 
+# helper to make our new combo names look clean in the report
+# turns "sex_&_race" into "Sex + Race"
+def _format_attr_name(name: str) -> str:
+    if "_&_" in name:
+        # handling our new intersectional keys
+        return name.replace("_&_", " + ").replace("_", " ").title()
+    return name.replace("_", " ").title()
 
 def export_json(report, output_path: str) -> str:
     """
@@ -54,7 +61,17 @@ def export_markdown(report, output_path: str) -> str:
     lines.append(f"- **Positive cases:** {report.dataset_info['positive_count']} ({report.dataset_info['positive_rate']*100:.1f}%)")
     lines.append(f"- **Negative cases:** {report.dataset_info['negative_count']}")
     lines.append(f"- **Model positive rate:** {report.dataset_info['prediction_positive_rate']*100:.1f}%")
-    lines.append(f"- **Attributes analyzed:** {', '.join(report.dataset_info['groups_analyzed'])}")
+    
+    # fix: filter out the messy combo names from the summary list so it stays clean
+    # we only want to show the "Base" attributes here
+    all_groups = report.dataset_info['groups_analyzed']
+    base_groups = [g for g in all_groups if "_&_" not in g]
+    combo_count = len(all_groups) - len(base_groups)
+    
+    lines.append(f"- **Base Attributes:** {', '.join(base_groups)}")
+    # brag that we did intersectional analysis
+    if combo_count > 0:
+        lines.append(f"- **Intersectional Combinations:** {combo_count} additional groups analyzed")
     lines.append("")
     
     # Violations
@@ -64,9 +81,11 @@ def export_markdown(report, output_path: str) -> str:
         
         for i, v in enumerate(report.violations, 1):
             severity_emoji = {"HIGH": "🔴", "MEDIUM": "🟡", "LOW": "🟢"}[v.severity]
+            # use our helper to make the title look pro
+            attr_display = _format_attr_name(v.attribute)
             lines.append(f"### {i}. {v.metric.replace('_', ' ').title()}")
             lines.append("")
-            lines.append(f"- **Attribute:** {v.attribute}")
+            lines.append(f"- **Attribute:** {attr_display}")
             lines.append(f"- **Severity:** {severity_emoji} {v.severity}")
             lines.append(f"- **Value:** {v.value:.4f}")
             lines.append(f"- **Threshold:** {v.threshold}")
@@ -90,55 +109,57 @@ def export_markdown(report, output_path: str) -> str:
         lines.append("All fairness metrics are within acceptable thresholds.")
         lines.append("")
     
-    # Metrics by Attribute
-    lines.append("## Detailed Metrics by Attribute")
+    # Detailed Metrics - SPLIT into two sections for readability
+    # first, filter the keys
+    single_keys = [k for k in report.metrics.keys() if "_&_" not in k]
+    intersectional_keys = [k for k in report.metrics.keys() if "_&_" in k]
+
+    # Helper function to generate the table rows (DRY principle!)
+    def _append_metrics_for_keys(keys_list):
+        for attr_name in keys_list:
+            metrics = report.metrics[attr_name]
+            # use the helper again
+            lines.append(f"### {_format_attr_name(attr_name)}")
+            lines.append("")
+            
+            # Fairness metrics table
+            lines.append("| Metric | Value | Status |")
+            lines.append("|--------|-------|--------|")
+            
+            dp_ratio = metrics.get("demographic_parity_ratio")
+            dp_diff = metrics.get("demographic_parity_difference")
+            eo_diff = metrics.get("equalized_odds_difference")
+            eop_diff = metrics.get("equal_opportunity_difference")
+            
+            if dp_ratio is not None:
+                status = "✅" if 0.8 <= dp_ratio <= 1.25 else "❌"
+                lines.append(f"| Demographic Parity Ratio | {dp_ratio:.4f} | {status} |")
+            
+            if dp_diff is not None:
+                status = "✅" if abs(dp_diff) <= 0.1 else "❌"
+                lines.append(f"| Demographic Parity Diff | {dp_diff:.4f} | {status} |")
+            
+            if eo_diff is not None:
+                status = "✅" if eo_diff <= 0.1 else "❌"
+                lines.append(f"| Equalized Odds Diff | {eo_diff:.4f} | {status} |")
+            
+            if eop_diff is not None:
+                status = "✅" if eop_diff <= 0.1 else "❌"
+                lines.append(f"| Equal Opportunity Diff | {eop_diff:.4f} | {status} |")
+            
+            lines.append("")
+
+    # Section 1: Base Attributes
+    lines.append("## Detailed Metrics: Single Attributes")
     lines.append("")
-    
-    for attr_name, metrics in report.metrics.items():
-        lines.append(f"### {attr_name.replace('_', ' ').title()}")
+    _append_metrics_for_keys(single_keys)
+
+    # Section 2: Intersectional (only if we have them)
+    if intersectional_keys:
+        lines.append("## Detailed Metrics: Intersectional Analysis")
+        lines.append("_Analysis of combined demographic groups (e.g. Race + Gender)_")
         lines.append("")
-        
-        # Fairness metrics table
-        lines.append("| Metric | Value | Status |")
-        lines.append("|--------|-------|--------|")
-        
-        dp_ratio = metrics.get("demographic_parity_ratio")
-        dp_diff = metrics.get("demographic_parity_difference")
-        eo_diff = metrics.get("equalized_odds_difference")
-        eop_diff = metrics.get("equal_opportunity_difference")
-        
-        if dp_ratio is not None:
-            status = "✅" if 0.8 <= dp_ratio <= 1.25 else "❌"
-            lines.append(f"| Demographic Parity Ratio | {dp_ratio:.4f} | {status} |")
-        
-        if dp_diff is not None:
-            status = "✅" if abs(dp_diff) <= 0.1 else "❌"
-            lines.append(f"| Demographic Parity Diff | {dp_diff:.4f} | {status} |")
-        
-        if eo_diff is not None:
-            status = "✅" if eo_diff <= 0.1 else "❌"
-            lines.append(f"| Equalized Odds Diff | {eo_diff:.4f} | {status} |")
-        
-        if eop_diff is not None:
-            status = "✅" if eop_diff <= 0.1 else "❌"
-            lines.append(f"| Equal Opportunity Diff | {eop_diff:.4f} | {status} |")
-        
-        lines.append("")
-        
-        # Group metrics table
-        if "group_metrics" in metrics:
-            lines.append("**Performance by group:**")
-            lines.append("")
-            lines.append("| Group | Count | Selection Rate | Accuracy | TPR | FPR |")
-            lines.append("|-------|-------|----------------|----------|-----|-----|")
-            
-            for group, gm in metrics["group_metrics"].items():
-                lines.append(
-                    f"| {group} | {gm['count']} | {gm['selection_rate']:.3f} | "
-                    f"{gm['accuracy']:.3f} | {gm['tpr']:.3f} | {gm['fpr']:.3f} |"
-                )
-            
-            lines.append("")
+        _append_metrics_for_keys(intersectional_keys)
     
     # Recommendations
     lines.append("## Recommendations")
@@ -190,7 +211,13 @@ def print_summary(report) -> None:
     print(f"  {CYAN}Dataset:{END}")
     print(f"    Samples: {report.dataset_info['total_samples']}")
     print(f"    Positive rate: {report.dataset_info['positive_rate']*100:.1f}%")
-    print(f"    Attributes: {', '.join(report.dataset_info['groups_analyzed'])}")
+    
+    # nicer display for console too
+    all_groups = report.dataset_info['groups_analyzed']
+    base_groups = [g for g in all_groups if "_&_" not in g]
+    print(f"    Attributes: {', '.join(base_groups)}")
+    if len(all_groups) > len(base_groups):
+        print(f"    Intersectional: Yes (+{len(all_groups) - len(base_groups)} combinations)")
     print()
     
     # Violations
@@ -204,14 +231,21 @@ def print_summary(report) -> None:
             else:
                 color = GREEN
             
+            # format the attribute name for console
+            attr_nice = _format_attr_name(v.attribute)
             print(f"    {color}[{v.severity}]{END} {v.metric}")
-            print(f"          {v.interpretation}")
+            print(f"          {BOLD}{attr_nice}{END}: {v.interpretation}")
         print()
     
     # Key metrics
     print(f"  {CYAN}Key Metrics:{END}")
     for attr, metrics in report.metrics.items():
-        print(f"    {attr}:")
+        # skip intersectional details in the console summary to keep it short
+        # unless it has a violation? nah, keep it simple.
+        if "_&_" in attr: 
+            continue 
+            
+        print(f"    {_format_attr_name(attr)}:")
         dp_ratio = metrics.get("demographic_parity_ratio")
         if dp_ratio is not None:
             status = f"{GREEN}✓{END}" if 0.8 <= dp_ratio <= 1.25 else f"{RED}✗{END}"
@@ -221,6 +255,12 @@ def print_summary(report) -> None:
         if eop_diff is not None:
             status = f"{GREEN}✓{END}" if eop_diff <= 0.1 else f"{RED}✗{END}"
             print(f"      Equal Opportunity Diff:   {eop_diff:.3f} {status}")
+    
+    # simple footer to let them know
+    has_intersectional = any("_&_" in k for k in report.metrics.keys())
+    if has_intersectional:
+         print(f"    {YELLOW}(Intersectional metrics available in full report){END}")
+
     print()
     
     # Top recommendation

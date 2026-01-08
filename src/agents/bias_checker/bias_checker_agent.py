@@ -13,6 +13,7 @@ import time
 from typing import Dict, List, Any, Optional, Union #return convenience
 from dataclasses import dataclass, field # simple dataclass
 from datetime import datetime
+from itertools import combinations # need this to mix and match the groups (black AND woman, asian AND man AND old)
 
 from fairlearn.metrics import (
     MetricFrame,
@@ -164,10 +165,41 @@ class BiasChecker:
         # Validate inputs
         self._validate_inputs(y_true, y_pred, sensitive_features)
 
+
+
+        # FIX: Interrelational groups
+        #
+        #
+        #
+        # 1. Grab the original features before we add new ones
+        base_features = list(sensitive_features.keys())
+        
+        # 2. Pruning Limit: Cap intersection depth to prevent exponential explosions
+        # We check 2-way and 3-way combinations. Anything deeper (4-way+) is usually noise.
+        MAX_INTERSECTION_DEPTH = 3
+        max_r = min(len(base_features) + 1, MAX_INTERSECTION_DEPTH + 1)
+
+        # 3. Generate Combinations
+        for r in range(2, max_r):
+            for combo in combinations(base_features, r):
+                # Create a readable name like "sex_&_race"
+                new_name = "_&_".join(combo)
+                
+                # Combine the values row-by-row
+                # "Male" + "Asian" -> "Male_Asian"
+                # using zip(*...) unpacks the lists of values for the features in this combo
+                combined_values = [
+                    "_".join(str(val) for val in row) 
+                    for row in zip(*(sensitive_features[key] for key in combo))
+                ]
+                
+                # Add to the main dictionary so the loop below processes it automatically
+                sensitive_features[new_name] = np.array(combined_values)
+    
         # Collect all metrics and violations
         all_metrics = {}
         all_violations = []
-
+        
         # Analyze each sensitive attribute
         # for example we want to check Age AND Gender AND Race, every category together
         for attr_name, attr_values in sensitive_features.items():

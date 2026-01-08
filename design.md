@@ -38,7 +38,7 @@
 ## Agent 1: Data Quality Validation Agent
 
 ### Purpose
-Autonomous validation of healthcare datasets before ML pipeline entry. Detects structural issues, missing values, type inconsistencies, domain violations, and anomalies using ensemble statistical + ML methods. Includes interactive remediation wizard for automated fixing.
+Autonomous validation of healthcare datasets before ML pipeline entry. Detects structural issues, missing values, type inconsistencies, domain violations, and anomalies using ensemble statistical + ML methods. Includes interactive remediation wizard for semi-automated fixing.
 
 ### Architecture
 
@@ -48,7 +48,7 @@ Autonomous validation of healthcare datasets before ML pipeline entry. Detects s
 1. `data_quality_agent.py` - Core validation engine (940 lines)
 2. `remediation_wizard.py` - Interactive issue fixing (390 lines)
 
-**Core Data Structures:**
+<!-- **Core Data Structures:**
 ```python
 @dataclass
 class Issue:
@@ -71,7 +71,7 @@ class ValidationReport:
     recommendations: List[str]
     ml_methods_used: List[str]
     execution_time_seconds: float
-```
+``` -->
 
 **Configuration:**
 ```python
@@ -100,7 +100,7 @@ class ValidationReport:
 
 3. **Type Consistency**
    - Mixed type detection via `pd.to_numeric(errors='coerce')`
-   - Returns exact row indices + problematic values
+   - Returns exact row indices + problematic values to help with cleaning the dataset
 
 4. **Domain Validation**
    - Pre-configured clinical ranges: age [0,120], BP_systolic [50,250], BMI [10,70], heart_rate [20,250], etc.
@@ -115,7 +115,7 @@ class ValidationReport:
    - **Ensemble:** Isolation Forest (global) + LOF (local)
    - **Consensus:** Both agree → HIGH confidence WARNING
    - **Preprocessing:** Drops 100% null columns before ML (prevents median=NaN crash)
-   - **Performance:** Auto-disables for large datasets (74x speedup)
+   - **Performance:** Auto-disables for large datasets (74x speedup). LOF is O(N^2). This algorithm significantly increases our runtime. 
 
 7. **Column Profiling**
    - Statistics: dtype, nulls, unique values, mean/std/min/max
@@ -133,27 +133,29 @@ class ValidationReport:
 
 ### Inputs/Outputs
 
-**Input:**
-```python
-df = pd.read_csv("patient_data.csv")
-from src.agents.data_quality import validate_dataset
-report = validate_dataset(df)
+**Input: Command Line Usage** 
+
+```bash
+# Run validation on a file (with interactive remediation)
+python3 src/agents/data_quality/data_quality_agent.py data/sample/your_file.csv
 ```
 
-**Output:**
-```python
-ValidationReport(
-    status=FAIL,
-    summary={"total_rows": 101766, "total_columns": 50},
-    critical_issues=[Issue(severity=CRITICAL, column="weight",
-                          description="96.9% missing")],
-    execution_time_seconds=2.77
-)
+**Output**
+```bash
+Affected: 6549 rows
+
+  🚨 [HIGH_NULL_RATE]
+     Column 'OHX19SE' has 66.7% missing values
+     Column: OHX19SE
+     Affected: 6549 rows
+
+continues....
 ```
+
 
 ### Key Design Decisions
 
-1. **Ensemble ML:** IF + LOF consensus reduces false positives by 68%
+1. **Ensemble ML:** IF + LOF consensus reduces false positives 
 2. **Performance optimization:** Auto-disable ML for datasets >5.6M points (LOF O(n²))
 3. **Defensive preprocessing:** Handles `?` as missing, drops empty columns before ML
 4. **Row-level tracking:** All issues include exact indices for debugging
@@ -176,7 +178,7 @@ Autonomous fairness auditing of ML predictions. Detects disparate impact across 
 2. `feature_detector.py` - Auto-detection of demographic columns (280 lines)
 3. `report.py` - JSON/Markdown export generators (110 lines)
 
-**Core Data Structures:**
+<!-- **Core Data Structures:**
 ```python
 @dataclass
 class BiasViolation:
@@ -197,7 +199,7 @@ class BiasReport:
     violations: List[BiasViolation]
     recommendations: List[str]
     execution_time_seconds: float
-```
+``` -->
 
 **Configuration:**
 ```python
@@ -231,15 +233,15 @@ class BiasReport:
 
 2. **Value Pattern Matching:** Detects demographics from data values
    - Sex: `{"male", "female"}` or `{1, 2}` with n=2
-   - Binary indicators: Exact 2 unique non-null values
+   - Uses subset matching, so these patterns detect columns that contain AT LEAST these values. eg: {"male","female", "non-binary"} --> detected. 
+   - Not efficient, but was primarily hard coded to allow me test mutliple datasets for bias checker agent
 
 3. **Age Binning:** Numeric age → bins [0, 40, 60, 100] → ["<40", "40-60", ">60"]
    - Skips if already categorical (pre-binned detection)
 
 **Critical Preprocessing:**
 - Missing/invalid values (`'nan'`, `'Unknown'`, `'?'`) → impute with mode
-- Prevents false violations from null demographic groups
-- Filters groups with n<30 (Central Limit Theorem minimum)
+
 
 ### Analysis Pipeline
 
@@ -249,49 +251,33 @@ class BiasReport:
 2. Filter small groups (exclude n<30, warn user)
 3. Calculate all 4 fairness metrics per attribute
 4. Detect violations (compare to thresholds)
-5. Assign severity (HIGH/MEDIUM/LOW based on disparity magnitude)
-6. Generate healthcare-specific interpretations
+5. automatically checks combinations of attributes. It no longer just checks if the model is fair to "Women"; it checks if it is fair to "Black Women" or "Older Men." This prevents "fairness gerrymandering."
+6. The interrelational fairness test was **implemented very last moment**, and not optimized properly. It produces many redundant groupings (e.g. pregnant_&_male). 
 
 ### Inputs/Outputs
 
-**Input:**
-```python
-y_true = [0, 1, 0, 1, ...]          # Actual labels
-y_pred = [0, 1, 1, 1, ...]          # Model predictions
-test_data = pd.DataFrame({
-    "age": [65, 42, 58, ...],
-    "sex": ["Male", "Female", ...],
-    "race": ["Caucasian", "AfricanAmerican", ...]
-})
-
-from src.agents.bias_checker import BiasChecker
-from src.agents.bias_checker.feature_detector import (
-    SensitiveFeatureDetector, prepare_sensitive_features
-)
-detector = SensitiveFeatureDetector()
-sensitive_cols = detector.detect(test_data)
-sensitive_features = prepare_sensitive_features(test_data, sensitive_cols)
-
-checker = BiasChecker()
-report = checker.check(y_true, y_pred, sensitive_features)
+**Input:CLI**
+```bash
+python3 tests/test_bias_checker_agent.py data/your_dataset.csv target_column_name
 ```
 
+Example:
+```bash
+python3 tests/test_bias_checker_agent.py data/sample/diabetic_data.csv readmitted
+```
+
+
+
 **Output:**
-```python
-BiasReport(
-    overall_status="BIAS_DETECTED",
-    violations=[
-        BiasViolation(
-            metric="equal_opportunity_difference",
-            attribute="RACE",
-            value=0.137,
-            severity="MEDIUM",
-            interpretation="Model misses 14% more high-risk cases in Other group",
-            group_values={"Caucasian": 0.507, "Other": 0.396}
-        )
-    ],
-    execution_time_seconds=3.40
-)
+```bash
+============================================================
+🤖  GENERIC BIAS AUDIT RUNNER
+    File:   data/sample/diabetic_data.csv
+    Target: readmitted
+============================================================
+
+✅ Loaded 101766 rows.
+⚙️  Preprocessing data...
 ```
 
 **Healthcare Interpretations:**
@@ -305,8 +291,7 @@ BiasReport(
 3. **Small group filtering:** Prevents spurious violations from n<30 (statistical validity)
 4. **Missing data imputation:** Avoids false bias from 'nan' groups
 5. **Regulatory alignment:** EEOC 4/5 rule (0.8 threshold), FDA AI/ML guidance
-6. **Healthcare context:** Clinical interpretations prioritize equal opportunity (underdiagnosis risk)
-
+6. **Healthcare context:** Clinical interpretations {LLM was used for generating interpretations and then it was hardcoded in our agent}
 ---
 
 ## Performance Summary
@@ -341,9 +326,8 @@ BiasReport(
 - Domain rules hardcoded (13 clinical features only)
 
 ### Bias Checker Agent
-- Feature detector uses hardcoded patterns (needs ML model for robust detection)
-- No individual fairness metrics (only group fairness)
+- Feature detector uses hardcoded patterns (needs integration with nimblemind's existing learning techniques to be production ready).
 - Assumes binary classification (0/1 labels)
 - Pre-binned age detection heuristic
 
-**Production Readiness:** ML-based feature detection, temporal validation, multi-class support, calibration analysis
+
