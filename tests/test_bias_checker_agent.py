@@ -58,13 +58,19 @@ def run_generic_audit(file_path, target_column):
     print(f"   - Final classes in y: {unique_vals}")
     # -------------------------------------
 
-    # Handle Features 
+    # Handle Features
     X_model = X.copy()
-    
+
+    # FIX: NHANES - Remove completely empty columns (BMIHEAD is 100% NaN)
+    empty_cols = X_model.columns[X_model.isnull().all()].tolist()
+    if empty_cols:
+        print(f"   - Dropping {len(empty_cols)} completely empty columns: {empty_cols}")
+        X_model = X_model.drop(columns=empty_cols)
+
     # Simple Imputer for missing values
     # We use 'most_frequent' because it works for both text and numbers
     imputer = SimpleImputer(strategy='most_frequent')
-    
+
     # Get column names back after imputation (imputer returns numpy array)
     X_model_imputed = pd.DataFrame(imputer.fit_transform(X_model), columns=X_model.columns)
     

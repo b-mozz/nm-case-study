@@ -15,15 +15,25 @@ from typing import Dict, List, Optional, Union
 # Known patterns for sensitive attributes (Regex)
 # this is to detect columns
 # for example: patient_age matches r"^age_.*"
+# FIX: NHANES - Reordered patterns to prevent overlapping matches (RIAGENDR was matching both sex and age)
 SENSITIVE_PATTERNS = {
     "sex": [
-        r"^sex$", r"^gender$", r"^male$", r"^female$", r"^m/f$", r"^sex_.*", r"^gender_.*"
+        # FIX: NHANES - Specific patterns MUST come first to prevent "gendr" from matching "ageyr"
+        r"^riagendr$",  # NHANES specific (R=respondent, IA=interview assessment, GENDR=gender)
+        r"^sex$", r"^gender$", r"^male$", r"^female$", r"^m/f$", r"^sex_.*", r"^gender_.*",
+        r".*sex.*", r".*gender.*",  # Fuzzy: catches SEX_CODE, GENDER_GROUP, etc.
     ],
     "age": [
-        r"^age$", r"^age_.*", r".*_age$", r"^patient_age$", r"^years$", r"^age_group$"
+        # FIX: NHANES - Specific patterns first (RIDAGEYR = age in years, RIDAGEMN = age in months for <1yr)
+        r"^ridageyr$", r"^ridagemn$",
+        r"^age$", r"^age_.*", r".*_age$", r"^patient_age$", r"^years$", r"^age_group$",
+        r".*age.*",  # Fuzzy: catches AGE_AT_DIAGNOSIS, PATIENT_AGE, etc.
     ],
     "race": [
-        r"^race$", r"^ethnicity$", r"^ethnic.*", r"^race_.*", r"^racial.*"
+        # FIX: NHANES - RIDRETH1 (3 categories), RIDRETH3 (6 categories with detailed Hispanic/Asian)
+        r"^ridreth.*",
+        r"^race$", r"^ethnicity$", r"^ethnic.*", r"^race_.*", r"^racial.*",
+        r".*race.*", r".*ethnic.*",  # Fuzzy: catches RACE_CODE, ETHNICITY_GROUP, etc.
     ],
     "nationality": [
         r"^nation.*", r"^country.*", r"^origin$", r"^birth_country$", r"^foreign.*"
@@ -117,9 +127,15 @@ class SensitiveFeatureDetector:
         
         for col in columns:
             col_lower = col.lower().strip() #make lowercase, then remove whitespace from both ends.
-            
+
+            # FIX: NHANES - Track which columns have been assigned to prevent RIAGENDR matching both sex and age
+            column_assigned = False
+
             # 1. Check Column Names against Regex Patterns
             for attr_type, patterns in self.patterns.items(): # attr_type is the key
+                if column_assigned:  # FIX: NHANES - Skip if this column already matched an attribute
+                    break
+
                 for pattern in patterns: # nested loop, now we are checking every pattern for every attr_type
 
                     # Match pattern from start of string (^ anchor). re.IGNORECASE makes it case-insensitive despite col_lower already being lowercase
@@ -128,6 +144,7 @@ class SensitiveFeatureDetector:
                         # Don't overwrite if we already found one for this type
                         if attr_type not in detected:
                             detected[attr_type] = col
+                            column_assigned = True  # FIX: NHANES - Mark column as assigned
                         break
             
             # 2. Check Values (specifically for Sex/Gender)

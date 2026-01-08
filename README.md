@@ -67,7 +67,10 @@ The Bias Checker Agent detects fairness violations in ML model predictions:
 nm-case-study/
 ├── src/
 │   ├── agents/
-│   │   ├── data_quality_agent.py       # Data Quality Validation Agent
+│   │   ├── data_quality/
+│   │   │   ├── data_quality_agent.py   # Data Quality Validation Agent
+│   │   │   ├── remediation_wizard.py   # Interactive Remediation Wizard
+│   │   │   └── __init__.py
 │   │   ├── bias_checker/
 │   │   │   ├── bias_checker_agent.py   # Bias Checker Agent
 │   │   │   ├── feature_detector.py     # Sensitive feature detection
@@ -127,7 +130,7 @@ pip install -r requirements.txt
 #### Basic Usage
 
 ```python
-from src.agents.data_quality_agent import validate_dataset, format_report_text
+from src.agents.data_quality import validate_dataset, format_report_text
 import pandas as pd
 
 # Load your data
@@ -143,7 +146,7 @@ print(format_report_text(report))
 #### With Custom Configuration
 
 ```python
-from src.agents.data_quality_agent import DataQualityValidationAgent
+from src.agents.data_quality import DataQualityValidationAgent
 
 # Custom thresholds
 config = {
@@ -159,10 +162,27 @@ agent = DataQualityValidationAgent(config=config)
 report = agent.validate(df)
 ```
 
+#### Interactive Remediation Wizard (NEW)
+
+After validation, you can interactively fix detected issues:
+
+```python
+from src.agents.data_quality import validate_dataset, run_remediation_wizard
+
+# Run validation
+df = pd.read_csv("data/patient_data.csv")
+report = validate_dataset(df)
+
+# Launch interactive wizard to fix issues
+if report.status in ["FAIL", "WARNING"]:
+    df_cleaned = run_remediation_wizard(df, report)
+    df_cleaned.to_csv("data/patient_data_cleaned.csv", index=False)
+```
+
 #### Validate from File
 
 ```python
-from src.agents.data_quality_agent import validate_file
+from src.agents.data_quality import validate_file
 
 # Supports CSV, Excel, Parquet
 report = validate_file("data/patient_data.csv")
@@ -171,12 +191,22 @@ report = validate_file("data/patient_data.csv")
 #### Command Line Usage
 
 ```bash
-# Run validation on a file
-python3 src/agents/data_quality_agent.py data/sample.csv
+# Run validation on a file (with interactive remediation)
+python3 src/agents/data_quality/data_quality_agent.py data/sample.csv
 
 # Run demo with sample data
-python3 src/agents/data_quality_agent.py
+python3 src/agents/data_quality/data_quality_agent.py
 ```
+
+**Interactive Wizard Flow:**
+1. Validation report displays all issues
+2. Prompt: "Would you like to interactively fix issues? (y/n)"
+3. If yes: Issues grouped by category (Empty Columns, Missing Values, etc.)
+4. For each category: Choose to handle, skip, or skip all remaining
+5. For each issue: Select fix strategy from multiple options
+6. Review summary of all fixes
+7. Apply fixes and save cleaned dataset
+8. Re-validate to confirm improvements
 
 #### Understanding the Report
 
@@ -196,6 +226,33 @@ for col_name, profile in report.column_profiles.items():
 # Get recommendations
 for rec in report.recommendations:
     print(rec)
+```
+
+#### Remediation Wizard Features
+
+**Issue Categories:**
+- **Empty Columns**: Drop or keep columns with 100% missing values
+- **Missing Values**: Fill with median/mean/mode or drop rows
+- **Type Inconsistencies**: Convert to numeric with different NaN handling strategies
+- **Domain Violations**: Cap values, replace with median, or drop invalid rows
+- **Duplicate Data**: Handle duplicate rows and IDs
+- **Outliers & Anomalies**: Cap, replace, keep, or export for review
+
+**Example Interaction:**
+```
+Category: MISSING VALUES (5 issue(s))
+Do you want to handle Missing Values issues? (y/n/skip_all): y
+
+[1] Column 'weight' has 49.1% missing values
+   Column: 'weight'
+   Options:
+     1. Fill with median
+     2. Fill with mean
+     3. Drop rows with missing values
+     4. Skip
+   Your choice (1/2/3/4): 1
+
+✅ Will fill 'weight' missing values with median
 ```
 
 ### Ethics and Bias Checker Agent

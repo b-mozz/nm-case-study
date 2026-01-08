@@ -235,15 +235,67 @@ Recommendations:
 
 ---
 
+## Test 3: NHANES 2013-2014 (Merged Dataset)
+
+### Dataset
+- **Name:** nhanes_for_bias_test.csv (merged: demographic.csv + examination.csv)
+- **Size:** 9,813 rows, 271 columns
+- **Numeric Columns:** 242
+- **Categorical Columns:** 29
+
+### Issue (Before Fix)
+Agent crashed on datasets with completely empty columns:
+```
+ValueError: Input X contains NaN.
+LocalOutlierFactor does not accept missing values encoded as NaN natively.
+```
+**Root Cause:** BMIHEAD column is 100% NaN. Median imputation failed (median of empty = NaN), LOF received NaN input.
+
+### Fix Applied
+**File:** `src/agents/data_quality_agent.py`
+**Lines:** 538-549
+
+```python
+# FIX: NHANES - Drop completely empty columns before imputation
+empty_cols = numeric_data.columns[numeric_data.isnull().all()].tolist()
+if empty_cols:
+    numeric_data = numeric_data.drop(columns=empty_cols)
+
+# FIX: NHANES - Use 0 as fallback if median is NaN
+for col in numeric_cols:
+    median_val = numeric_data[col].median()
+    if pd.isna(median_val):
+        median_val = 0  # Fallback for sparse columns
+    numeric_data[col] = numeric_data[col].fillna(median_val)
+```
+
+### Results (After Fix)
+- **Status:** FAIL
+- **Completeness:** 58.9% (1,092,369 missing values)
+- **Critical Issues:** 117 (HIGH_NULL_RATE: 117 columns with >50% missing)
+- **Warnings:** 186
+- **Duplicates:** 0
+
+#### Key Findings
+1. **RIDAGEMN:** 93.5% missing (age in months, only for infants <1yr)
+2. **DMQADFC:** 94.7% missing (diabetes family history follow-up)
+3. **BPXSY4/BPXDI4:** 94.8% missing (4th blood pressure reading, optional)
+4. **RIDEXPRG:** 87.1% missing (pregnancy test, only for females 8-59)
+5. **Multiple columns >50% missing:** Government surveys often have conditional questions
+
+---
+
 ## Conclusion
 
 The Data Quality Agent is now **fully functional** after fixes. Key achievements:
 
 ✅ **Accurate Missing Value Detection:** Detects all missing indicators (`?`, `NA`, `null`, etc.)
+✅ **Handles Empty Columns:** Gracefully drops 100% NaN columns before ML anomaly detection
+✅ **Robust Imputation:** Fallback to 0 if median is NaN for sparse columns
 ✅ **Configurable:** Users can customize missing indicators via config
 ✅ **Comprehensive Checks:** 6 validation categories covering schema, completeness, types, domain, outliers, anomalies
 ✅ **ML-Enhanced:** Uses Isolation Forest + LOF for multivariate anomaly detection
-✅ **Production-Ready:** Successfully tested on 350K+ rows across 2 diverse datasets
+✅ **Production-Ready:** Successfully tested on 360K+ rows across 3 diverse datasets
 
-**Before Fix:** Agent was blind to 51.5% of missing data
-**After Fix:** Agent detects 100% of missing data correctly
+**Before Fix:** Agent was blind to 51.5% of missing data, crashed on empty columns
+**After Fix:** Agent detects 100% of missing data correctly and handles edge cases

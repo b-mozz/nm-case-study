@@ -49,6 +49,12 @@ outputs/logs/*.log
 outputs/reports/*.json
 outputs/reports/*.md
 
+# Documentation (case study deliverables - not for public repo)
+design.md
+execution_logs.md
+critique.md
+presentation_deck.md
+
 # Testing
 .pytest_cache/
 .coverage
