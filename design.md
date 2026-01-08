@@ -301,7 +301,7 @@ python3 tests/test_bias_checker_agent.py data/sample/diabetic_data.csv readmitte
 | Dataset | Rows × Cols | Time | Status |
 |---------|-------------|------|--------|
 | diabetic_data.csv | 101,766 × 50 | 2.77s | FAIL (3 critical) |
-| diabetes_012.csv | 253,680 × 22 | 31.71s | WARNING |
+| diabetes_012_(..).csv | 253,680 × 22 | 31.71s | WARNING |
 | LLCP2022_reduced.csv | 400,000 × 30 | 1.16s | WARNING (ML disabled) |
 
 **Optimization:** Auto-disables ML when data points >5.6M (LOF O(n²) → 74x speedup)
@@ -311,7 +311,7 @@ python3 tests/test_bias_checker_agent.py data/sample/diabetic_data.csv readmitte
 | Dataset | Test Samples | Time | Violations |
 |---------|--------------|------|------------|
 | diabetic_data.csv | 30,530 | 3.40s | 8 (Race, Age) |
-| diabetes_012.csv | 76,104 | 4.44s | 0 |
+| diabetes_012_(..).csv | 76,104 | 4.44s | 0 |
 | LLCP2022_reduced.csv | 120,000 | 11.53s | 1 (Race) |
 
 **Scales linearly:** Handles 120k samples efficiently.
