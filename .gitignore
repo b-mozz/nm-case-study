@@ -43,6 +43,7 @@ data/*.csv
 data/*.xlsx
 data/*.parquet
 !data/sample/
+data/sample/LLCP2022.csv
 
 # Outputs
 outputs/logs/*.log

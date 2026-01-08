@@ -11,6 +11,7 @@ Date: January 2025
 
 import pandas as pd
 import numpy as np
+import time
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Any
 from enum import Enum
@@ -70,6 +71,7 @@ class ValidationReport:
     column_profiles: Dict[str, ColumnProfile]  # Per-column analysis
     recommendations: List[str]            # "Consider removing column X"
     ml_methods_used: List[str] = field(default_factory=list)  # ML methods used for anomaly detection
+    execution_time_seconds: float = 0.0   # Total execution time in seconds
 
 #---------0---------------------------
 
@@ -133,6 +135,9 @@ class DataQualityValidationAgent:
         Returns:
             ValidationReport with all findings
         """
+        # Start timing
+        start_time = time.time()
+
         # Reset state for new validation
         self.issues = []
         self.ml_methods_used = []
@@ -147,8 +152,12 @@ class DataQualityValidationAgent:
         self._check_anomalies_ml(data)              # 6. Anomaly detection (ML)
         self._build_column_profiles(data)           # 7. Build column profiles
 
+        # Calculate execution time
+        execution_time = time.time() - start_time
+
         # Build and return report
         report = self._build_report(data)
+        report.execution_time_seconds = execution_time
 
         return report
 
@@ -803,15 +812,16 @@ def validate_file(filepath: str, config: Optional[Dict] = None) -> ValidationRep
 
 def format_report_text(report: ValidationReport) -> str:
     """Format report as human-readable text."""
-    
+
     lines = []
     lines.append("=" * 60)
     lines.append("DATA QUALITY VALIDATION REPORT")
     lines.append("=" * 60)
-    
+
     status_emoji = {"PASS": "✅", "WARNING": "⚠️", "FAIL": "❌"}
     lines.append(f"\nStatus: {status_emoji.get(report.status.value, '')} {report.status.value}")
-    
+    lines.append(f"Execution Time: {report.execution_time_seconds:.2f} seconds")
+
     lines.append(f"\n--- Summary ---")
     for key, value in report.summary.items():
         lines.append(f"  {key}: {value}")
@@ -893,7 +903,8 @@ def format_report_json(report: ValidationReport) -> Dict:
         "info": [issue_to_dict(i) for i in report.info],
         "column_profiles": {n: profile_to_dict(p) for n, p in report.column_profiles.items()},
         "recommendations": report.recommendations,
-        "ml_methods_used": report.ml_methods_used
+        "ml_methods_used": report.ml_methods_used,
+        "execution_time_seconds": report.execution_time_seconds
     }
 
 

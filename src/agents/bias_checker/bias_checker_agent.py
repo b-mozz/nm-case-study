@@ -9,6 +9,7 @@ Uses Fairlearn for metric calculations.
 
 import numpy as np
 import pandas as pd
+import time
 from typing import Dict, List, Any, Optional, Union #return convenience
 from dataclasses import dataclass, field # simple dataclass
 from datetime import datetime
@@ -46,6 +47,7 @@ class BiasReport:
     metrics: Dict[str, Any] # numbers calculated by FairLearn
     violations: List[BiasViolation] # list of all the BiasViolation Object (right on top of this dataclass)
     recommendations: List[str] # advice for the developers/whoever is working with the data
+    execution_time_seconds: float = 0.0  # Total execution time in seconds
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert report to dictionary for JSON serialization."""
@@ -76,7 +78,8 @@ class BiasReport:
                 }
                 for v in self.violations
             ],
-            "recommendations": self.recommendations
+            "recommendations": self.recommendations,
+            "execution_time_seconds": self.execution_time_seconds
         }
 
 
@@ -140,46 +143,52 @@ class BiasChecker:
     ) -> BiasReport:
         """
         Perform bias analysis on model predictions.
-        
+
         Args:
             y_true: Actual outcome labels (0/1)
             y_pred: Model predictions (0/1)
             sensitive_features: Dict mapping attribute names to their values
                                e.g., {"sex": [...], "age_group": [...]}
-        
+
         Returns:
             BiasReport with metrics, violations, and recommendations
         """
+        # Start timing
+        start_time = time.time()
+
         # Convert to numpy arrays, user might provide list, pandas series or NumPy arrays
         # maintains uniformity so that our imported functions dont crash
         y_true = np.array(y_true)
         y_pred = np.array(y_pred)
-        
+
         # Validate inputs
         self._validate_inputs(y_true, y_pred, sensitive_features)
-        
+
         # Collect all metrics and violations
         all_metrics = {}
         all_violations = []
-        
+
         # Analyze each sensitive attribute
         # for example we want to check Age AND Gender AND Race, every category together
         for attr_name, attr_values in sensitive_features.items():
             attr_values = np.array(attr_values)
-            
+
             metrics, violations = self._analyze_attribute(
                 y_true, y_pred, attr_values, attr_name
             )
-            
+
             all_metrics[attr_name] = metrics
             all_violations.extend(violations)
-        
+
         # Determine overall status
         overall_status = "BIAS_DETECTED" if all_violations else "PASS"
-        
+
         # Generate recommendations
         recommendations = self._generate_recommendations(all_violations)
-        
+
+        # Calculate execution time
+        execution_time = time.time() - start_time
+
         # Build report
         report = BiasReport(
             timestamp=datetime.now().isoformat(),
@@ -194,9 +203,10 @@ class BiasChecker:
             overall_status=overall_status,
             metrics=all_metrics,
             violations=all_violations,
-            recommendations=recommendations
+            recommendations=recommendations,
+            execution_time_seconds=execution_time
         )
-        
+
         return report
     
     def _validate_inputs(
