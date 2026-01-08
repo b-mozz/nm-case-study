@@ -1,6 +1,7 @@
 import sys
 import pandas as pd
 import numpy as np
+import time
 from pathlib import Path
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
@@ -43,19 +44,35 @@ def run_generic_audit(file_path, target_column):
     y = df[target_column]
 
     # --- FIX: ROBUST BINARY CONVERSION ---
-    # Convert to string to handle mixed types safely
-    y_str = y.astype(str).str.upper().str.strip()
-    
-    # Identify "Negative" class (0)
-    # matches: "NO", "FALSE", "0", "N", "NEGATIVE"
-    is_negative = y_str.isin(['NO', 'FALSE', '0', '0.0', 'N', 'NEGATIVE'])
-    
-    # Everything else is "Positive" (1)
-    y = np.where(is_negative, 0, 1)
-    
-    unique_vals = np.unique(y)
-    print(f"   - Binarized target. Mapped 'NO'/'0' to 0. All others to 1.")
-    print(f"   - Final classes in y: {unique_vals}")
+    # FIX: After testing LLCP2022, found that DIABETE4 uses numeric codes (1/2=yes, 3=no, 4=prediabetes)
+    # Need to handle both string-based ("Yes"/"No") and numeric-coded targets
+
+    # First, try numeric binarization (for codes like 1/2 vs 3/4)
+    if pd.api.types.is_numeric_dtype(y):
+        # For numeric codes, assume lower values (1, 2) = positive, higher values = negative
+        # Works for: DIABETE4 (1/2 = yes, 3/4 = no), binary 0/1, etc.
+        median_val = y.median()
+        y_binary = np.where(y <= median_val, 1, 0)
+        print(f"   - Binarized numeric target using median ({median_val}). ≤median → 1, >median → 0.")
+    else:
+        # String-based binarization
+        y_str = y.astype(str).str.upper().str.strip()
+
+        # Identify "Negative" class (0)
+        # matches: "NO", "FALSE", "0", "N", "NEGATIVE"
+        is_negative = y_str.isin(['NO', 'FALSE', '0', '0.0', 'N', 'NEGATIVE'])
+
+        # Everything else is "Positive" (1)
+        y_binary = np.where(is_negative, 0, 1)
+        print(f"   - Binarized string target. Mapped 'NO'/'0' to 0. All others to 1.")
+
+    y = y_binary
+    unique_vals, counts = np.unique(y, return_counts=True)
+    print(f"   - Final classes in y: {dict(zip(unique_vals, counts))}")
+
+    if len(unique_vals) < 2:
+        print(f"   ⚠️  WARNING: Only one class found! Cannot train model or check bias.")
+        return
     # -------------------------------------
 
     # Handle Features
@@ -114,15 +131,22 @@ def run_generic_audit(file_path, target_column):
 
     # C. Audit
     checker = BiasChecker()
+
+    print(f"   - Running bias check on {len(y_test):,} test samples...")
+    start_time = time.time()
+
     report = checker.check(
         y_true=y_test,
         y_pred=y_pred,
         sensitive_features=sensitive_features
     )
 
+    execution_time = time.time() - start_time
+
     # 5. Print Results
     print(f"\n{'='*30}")
     print(f"📋  FINAL REPORT STATUS: {report.overall_status}")
+    print(f"⏱️  Execution Time: {execution_time:.2f} seconds")
     print(f"{'='*30}")
     
     if report.violations:

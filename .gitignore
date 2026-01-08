@@ -55,6 +55,8 @@ design.md
 execution_logs.md
 critique.md
 presentation_deck.md
+CHANGES.md
+changes.md
 
 # Testing
 .pytest_cache/

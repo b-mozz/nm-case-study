@@ -106,6 +106,7 @@ class DataQualityValidationAgent:
             "min_rows": 10,                    # Minimum rows required
             "max_examples": 20,                # Maximum examples to show in reports
             "anomaly_contamination": 0.1,      # Expected proportion of outliers (10%)
+            "max_data_points_for_ml": 5_600_000,  # Max data points (rows*cols) for ML - based on diabetes_012 performance
             # Fix after initial test run: diabetic_data used '?' for missing values (UCI ML Repository standard)
             # 192,849 missing values went undetected without this (weight column was 96.8% missing!)
             "missing_indicators": ['?', '', ' ', 'NA', 'N/A', 'null', 'NULL', 'None'],  # Values treated as missing
@@ -524,23 +525,36 @@ class DataQualityValidationAgent:
     
 
     # used IsolationForest and LOF
-    # IsolationForest --> for contextual global outliers 
-    # LOF ensemble --> for local outliers 
+    # IsolationForest --> for contextual global outliers
+    # LOF ensemble --> for local outliers
     def _check_anomalies_ml(self, df: pd.DataFrame) -> None:
             """Detect anomalies using Isolation Forest + LOF ensemble."""
-            
+
             try:
                 from sklearn.ensemble import IsolationForest
                 from sklearn.neighbors import LocalOutlierFactor
             except ImportError:
-                return # DEBUG: try..except was added later as I was getting errors. Decided to keep it. 
-            
+                return # DEBUG: try..except was added later as I was getting errors. Decided to keep it.
+
             max_ex = self.config["max_examples"]
             contamination = self.config["anomaly_contamination"]
-            
+            max_data_points = self.config["max_data_points_for_ml"]
+
             numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-            
+
             if len(numeric_cols) < 2 or len(df) < 50:
+                return
+
+            # Check if dataset is too large for ML (performance optimization)
+            current_data_points = len(df) * len(numeric_cols)
+            if current_data_points > max_data_points:
+                self.issues.append(Issue(
+                    severity=IssueSeverity.INFO,
+                    issue_type="ML_ANOMALY_DETECTION_SKIPPED",
+                    column=None,
+                    description=f"ML anomaly detection (Isolation Forest + LOF) disabled for performance. Dataset has {current_data_points:,} data points (limit: {max_data_points:,}). Use statistical outlier detection instead.",
+                    affected_rows=0
+                ))
                 return
             
             # Prepare data
@@ -958,7 +972,17 @@ if __name__ == "__main__":
         try:
             response = input().strip().lower()
             if response == 'y':
-                from .remediation_wizard import run_remediation_wizard
+                # Try relative import first (when used as module), fallback to absolute import
+                try:
+                    from .remediation_wizard import run_remediation_wizard
+                except ImportError:
+                    # If relative import fails, try importing from same directory
+                    import os
+                    import sys
+                    current_dir = os.path.dirname(os.path.abspath(__file__))
+                    if current_dir not in sys.path:
+                        sys.path.insert(0, current_dir)
+                    from remediation_wizard import run_remediation_wizard
 
                 df_cleaned = run_remediation_wizard(df, report)
 
