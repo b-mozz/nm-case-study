@@ -43,7 +43,7 @@ data/*.csv
 data/*.xlsx
 data/*.parquet
 !data/sample/
-data/sample/LLCP2022.csv
+data/sample/LLCP2022.csv  # Original 408MB file - too large for GitHub
 
 # Outputs
 outputs/logs/*.log
