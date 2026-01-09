@@ -5,7 +5,7 @@ pip install -r requirements.txt
 ```
 
 
-## 1. Data Quality Validation Agent
+## 2. Data Quality Validation Agent
 
 Run validation on a file (includes interactive remediation):
 
@@ -13,7 +13,7 @@ Run validation on a file (includes interactive remediation):
 python3 src/agents/data_quality/data_quality_agent.py data/sample/your_file.csv
 ```
 
-## 2. Ethics and Bias Checker Agent
+## 3. Ethics and Bias Checker Agent
 
 Run the bias checker using the generic audit runner:
 Bash
