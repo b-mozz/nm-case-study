@@ -59,6 +59,4 @@ htmlcov/
 .env
 .env.local
 
-reports/report_bias_agent.md
-reports/report_data_quality_agent.md
 
