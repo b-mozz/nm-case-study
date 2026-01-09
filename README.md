@@ -1,4 +1,9 @@
-# How to Run
+## 1. Install Dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
 
 ## 1. Data Quality Validation Agent
 
