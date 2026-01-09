@@ -45,8 +45,8 @@ Autonomous validation of healthcare datasets before ML pipeline entry. Detects s
 **Location:** `src/agents/data_quality/`
 
 **Components:**
-1. `data_quality_agent.py` - Core validation engine (940 lines)
-2. `remediation_wizard.py` - Interactive issue fixing (390 lines)
+1. `data_quality_agent.py` - Core validation engine 
+2. `remediation_wizard.py` - Interactive issue fixing 
 
 <!-- **Core Data Structures:**
 ```python
@@ -174,9 +174,9 @@ Autonomous fairness auditing of ML predictions. Detects disparate impact across 
 **Location:** `src/agents/bias_checker/`
 
 **Components:**
-1. `bias_checker_agent.py` - Core metric computation (530 lines)
-2. `feature_detector.py` - Auto-detection of demographic columns (280 lines)
-3. `report.py` - JSON/Markdown export generators (110 lines)
+1. `bias_checker_agent.py` - Core metric computation 
+2. `feature_detector.py` - Auto-detection of demographic columns 
+3. `report.py` - JSON/Markdown export generators 
 
 <!-- **Core Data Structures:**
 ```python
