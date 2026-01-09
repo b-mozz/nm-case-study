@@ -252,13 +252,17 @@ class BiasReport:
 3. Calculate all 4 fairness metrics per attribute
 4. Detect violations (compare to thresholds)
 5. automatically checks combinations of attributes. It no longer just checks if the model is fair to "Women"; it checks if it is fair to "Black Women" or "Older Men." This prevents "fairness gerrymandering."
-6. The interrelational fairness test was **implemented very last moment**, and not optimized properly. It produces many redundant groupings (e.g. pregnant_&_male). 
+6. The interrelational fairness test was **implemented very last moment**, and not optimized properly. It produces many redundant groupings (e.g. pregnant_&_male).
+
+### Proxy Model for Testing
+
+To test the bias checker agent, we need model predictions. The test script (`test_bias_checker_agent.py`) uses a simple Random Forest classifier (10 trees, depth=10) as a stand-in model. It trains on 70% of the data and predicts on the remaining 30%. These predictions are then checked for bias. This lets us test the agent quickly on any dataset without needing a real production model.
 
 ### Inputs/Outputs
 
 **Input:CLI**
 ```bash
-python3 tests/test_bias_checker_agent.py data/your_dataset.csv target_column_name
+python3 tests/test_bias_checker_agent.py data/sample/your_dataset.csv target_column_name
 ```
 
 Example:
@@ -329,5 +333,21 @@ python3 tests/test_bias_checker_agent.py data/sample/diabetic_data.csv readmitte
 - Feature detector uses hardcoded patterns (needs integration with nimblemind's existing learning techniques to be production ready).
 - Assumes binary classification (0/1 labels)
 - Pre-binned age detection heuristic
+
+---
+
+## Integration with Nimblemind.ai Framework
+
+Based on the Nimblemind agentic AI pipeline (7 agents total: Feature Identifier, Data Anonymization, Feature Extraction, Model-Data Matcher, Preprocessing Recommender, Preprocessing Implementor, Model Inference), our agents can be integrated as follows:
+
+**Data Quality Agent:**
+- **Position:** Insert after Data Anonymization Agent, before Feature Extraction Agent
+- **Purpose:** Validates anonymized data quality before feature extraction and model selection
+
+**Bias Checker Agent:**
+- **Position:** Insert after Model Inference Agent
+- **Purpose:** Audits model predictions for fairness violations before final output to users
+
+This integration adds automated quality assurance and fairness validation to the end-to-end clinical AI workflow.
 
 
