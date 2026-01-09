@@ -38,12 +38,6 @@ ENV/
 .ipynb_checkpoints
 *.ipynb_checkpoints/
 
-# Data
-data/*.csv
-data/*.xlsx
-data/*.parquet
-!data/sample/
-data/sample/LLCP2022.csv  # Original 408MB file - too large for GitHub
 
 # Outputs
 outputs/logs/*.log
@@ -51,9 +45,6 @@ outputs/reports/*.json
 outputs/reports/*.md
 
 # Documentation (case study deliverables - not for public repo)
-
-
-
 presentation_deck.md
 CHANGES.md
 changes.md
@@ -67,3 +58,7 @@ htmlcov/
 # Environment
 .env
 .env.local
+
+reports/report_bias_agent.md
+reports/report_data_quality_agent.md
+
