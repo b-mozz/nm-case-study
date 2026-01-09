@@ -52,8 +52,8 @@ outputs/reports/*.md
 
 # Documentation (case study deliverables - not for public repo)
 
-execution_logs.md
-critique.md
+
+
 presentation_deck.md
 CHANGES.md
 changes.md
